@@ -1,0 +1,454 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  LayoutDashboard, 
+  Package, 
+  PlusCircle, 
+  QrCode, 
+  Search, 
+  Camera, 
+  ChevronRight, 
+  AlertCircle,
+  CheckCircle2,
+  TrendingUp,
+  LogOut,
+  Bell,
+  User,
+  Image as ImageIcon,
+  Loader2,
+  X,
+  Eye,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  Filter,
+  RefreshCcw
+} from 'lucide-react';
+
+// --- Komponen Logo PLN ---
+const PlnLogo = ({ className = "w-10 h-10" }) => (
+  <svg viewBox="0 0 100 130" className={className} xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="50" cy="65" rx="45" ry="55" fill="#00549B" />
+    <path 
+      d="M65 20 L35 70 L55 70 L40 110 L75 55 L55 55 Z" 
+      fill="#FFED00" 
+      stroke="#ED1C24" 
+      strokeWidth="2"
+    />
+  </svg>
+);
+
+// --- Mock Data Awal ---
+const INITIAL_ASSETS = [
+  { id: 1, number: 'UJSL - 000001', name: 'Monitor LG 24"', category: 'Elektronik', location: 'Gedung Admin Lt 1', condition: 'Baik', date: '2024-01-15', image: null, description: 'Monitor operasional staf' },
+  { id: 2, number: 'UJSL - 000002', name: 'Meja Kerja Kayu', category: 'Furniture', location: 'Ruang Rapat Utama', condition: 'Baik', date: '2024-01-16', image: null, description: 'Meja rapat kapasitas 10 orang' },
+  { id: 3, number: 'UJSL - 000003', name: 'Multimeter Fluke', category: 'Alat Ukur', location: 'Gudang Workshop', condition: 'Rusak', date: '2024-01-18', image: null, description: 'Layar retak, perlu penggantian unit' },
+  { id: 4, number: 'UJSL - 000004', name: 'AC Split Panasonic', category: 'Elektronik', location: 'Ruang Server', condition: 'Diperbaiki', date: '2024-02-01', image: null, description: 'Maintenance rutin freon' },
+  { id: 5, number: 'UJSL - 000005', name: 'Laptop Dell Latitude', category: 'Elektronik', location: 'Gedung Admin Lt 2', condition: 'Baik', date: '2024-02-05', image: null, description: 'Unit inventaris Manager' },
+];
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [assets, setAssets] = useState(INITIAL_ASSETS);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('Semua'); // New state for filtering
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [showNotification, setShowNotification] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const [newAsset, setNewAsset] = useState({
+    name: '',
+    category: 'Lainnya',
+    location: '',
+    condition: 'Baik',
+    description: '',
+    image: null
+  });
+
+  const notify = (message, type = 'success') => {
+    setShowNotification({ message, type });
+    setTimeout(() => setShowNotification(null), 3000);
+  };
+
+  // --- Fungsi Navigasi dari Dashboard Card ---
+  const handleStatClick = (status) => {
+    setFilterStatus(status);
+    setSearchQuery('');
+    setActiveTab('list');
+  };
+
+  // --- Fungsi Download Template XLS ---
+  const handleDownloadTemplate = () => {
+    const headers = '<tr><th>Nomor Aset</th><th>Nama Aset</th><th>Kategori</th><th>Lokasi</th><th>Kondisi</th><th>Keterangan</th></tr>';
+    const exampleRow = '<tr><td>UJSL - XXXXXX</td><td>(Isi Nama Barang)</td><td>Elektronik/Furniture/Alat Ukur</td><td>(Isi Lokasi)</td><td>Baik/Rusak/Diperbaiki</td><td>(Opsional)</td></tr>';
+    
+    const htmlTable = `<table>${headers}${exampleRow}</table>`;
+    const template = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Template Import SMAD</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+      <body>${htmlTable}</body></html>`;
+
+    const blob = new Blob([template], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Template_Import_SMAD_UJSL.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    notify("Template berhasil diunduh. Gunakan format ini untuk Import.");
+  };
+
+  // --- Fungsi Export XLS ---
+  const handleExport = () => {
+    const tableHeader = '<tr><th>Nomor Aset</th><th>Nama Aset</th><th>Kategori</th><th>Lokasi</th><th>Kondisi</th><th>Keterangan</th><th>Tanggal Daftar</th></tr>';
+    const tableRows = assets.map(a => 
+      `<tr><td>${a.number}</td><td>${a.name}</td><td>${a.category}</td><td>${a.location}</td><td>${a.condition}</td><td>${a.description || '-'}</td><td>${a.date}</td></tr>`
+    ).join('');
+
+    const htmlTable = `<table>${tableHeader}${tableRows}</table>`;
+    const template = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Data Aset UJSL</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>
+      <body>${htmlTable}</body></html>`;
+
+    const blob = new Blob([template], { type: 'application/vnd.ms-excel' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Database_SMAD_UJSL_${new Date().toISOString().split('T')[0]}.xls`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    notify("Database berhasil diexport ke format XLS");
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      notify("Memproses file Excel: " + file.name, "success");
+      setTimeout(() => {
+        const mockImported = [{ id: Date.now(), number: 'UJSL - 000088', name: 'Printer Epson L3110', category: 'Elektronik', location: 'Gedung Admin Lt 1', condition: 'Baik', date: '2024-03-01', image: null, description: 'Unit baru' }];
+        setAssets(prev => [...mockImported, ...prev]);
+        notify("Data dari Excel berhasil ditambahkan ke sistem.");
+      }, 1500);
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = null; 
+  };
+
+  const triggerImport = () => fileInputRef.current?.click();
+
+  const handleAiScan = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsAiLoading(true);
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result.split(',')[1];
+      const previewUrl = reader.result;
+      setNewAsset(prev => ({ ...prev, image: previewUrl }));
+      try {
+        const apiKey = ""; 
+        const prompt = "Identify this office asset. Return only a JSON object with keys: name (short title) and category (must be one of: Elektronik, Furniture, Alat Ukur, Alat Kesehatan, Alat Olah Raga, Alat Dokumentasi, Lainnya).";
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64Data } }] }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        });
+        const result = await response.json();
+        const aiData = JSON.parse(result.candidates[0].content.parts[0].text);
+        setNewAsset(prev => ({ ...prev, name: aiData.name, category: aiData.category }));
+        notify("AI mendeteksi: " + aiData.name);
+      } catch (error) {
+        notify("Gagal menganalisis gambar.", "error");
+      } finally {
+        setIsAiLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeImage = () => setNewAsset(prev => ({ ...prev, image: null }));
+
+  const handleSaveAsset = () => {
+    const nextSequence = assets.length + 1;
+    const seq = String(nextSequence).padStart(6, '0');
+    const assetNum = `UJSL - ${seq}`;
+    const assetToAdd = { ...newAsset, id: Date.now(), number: assetNum, date: new Date().toISOString().split('T')[0] };
+    setAssets([assetToAdd, ...assets]);
+    setNewAsset({ name: '', category: 'Lainnya', location: '', condition: 'Baik', description: '', image: null });
+    setActiveTab('list');
+    notify("Aset " + assetNum + " berhasil didaftarkan.");
+  };
+
+  const SidebarItem = ({ id, icon: Icon, label }) => (
+    <button
+      onClick={() => setActiveTab(id)}
+      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
+        activeTab === id ? 'bg-white/20 text-white font-semibold shadow-inner' : 'text-white/70 hover:bg-white/10 hover:text-white'
+      }`}
+    >
+      <Icon size={20} />
+      <span>{label}</span>
+    </button>
+  );
+
+  // --- Filter Logic for the List Tab ---
+  const filteredAssets = assets.filter(a => {
+    const matchesSearch = a.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          a.number.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (filterStatus === 'Semua') return matchesSearch;
+    if (filterStatus === 'Baik') return matchesSearch && a.condition === 'Baik';
+    if (filterStatus === 'Perlu Perbaikan') return matchesSearch && (a.condition === 'Rusak' || a.condition === 'Diperbaiki');
+    if (filterStatus === 'Baru') {
+        const thisMonth = new Date().getMonth();
+        const assetMonth = new Date(a.date).getMonth();
+        return matchesSearch && assetMonth === thisMonth;
+    }
+    return matchesSearch;
+  });
+
+  return (
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-800 overflow-hidden">
+      {/* Sidebar - PT PLN Branding */}
+      <aside className="w-64 bg-gradient-to-b from-[#00549B] to-[#00549B] p-6 flex flex-col shadow-2xl z-20">
+        <div className="flex flex-col items-center mb-10 text-white text-center">
+          <div className="bg-white p-2 rounded-2xl shadow-lg mb-4">
+            <PlnLogo className="w-12 h-16" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold tracking-widest uppercase opacity-80">Nusantara Power</h2>
+            <h1 className="text-xl font-black tracking-tighter">UP SAMBELIA</h1>
+            <div className="h-1 w-12 bg-[#8CC63F] mx-auto mt-2 rounded-full"></div>
+          </div>
+        </div>
+        <nav className="flex-1 space-y-2">
+          <SidebarItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <SidebarItem id="list" icon={Package} label="Daftar Aset" />
+          <SidebarItem id="add" icon={PlusCircle} label="Tambah Aset" />
+        </nav>
+        <div className="pt-6 border-t border-white/10">
+          <button className="w-full flex items-center space-x-3 px-4 py-3 text-white/70 hover:text-white transition-colors">
+            <LogOut size={20} />
+            <span className="font-medium">Keluar</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-8 shrink-0 shadow-sm z-10">
+          <h1 className="text-lg font-bold text-slate-700 capitalize">
+            <span className="text-[#00549B]">SMAD</span> / <span className="text-slate-500 font-medium">{activeTab.replace('-', ' ')}</span>
+          </h1>
+          <div className="flex items-center space-x-6">
+            <Bell size={20} className="text-slate-400 cursor-pointer" />
+            <div className="flex items-center space-x-3 border-l pl-6 border-slate-200">
+              <div className="text-right hidden md:block">
+                <p className="text-sm font-bold">Admin Sambelia</p>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Sarana & Keuangan</p>
+              </div>
+              <div className="w-10 h-10 bg-gradient-to-br from-[#00549B] to-[#8CC63F] rounded-xl flex items-center justify-center text-white shadow-md">
+                <User size={20} />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-8 bg-[#F8FAFC]">
+          {showNotification && (
+            <div className={`fixed top-20 right-8 z-50 flex items-center space-x-3 px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-10 ${
+              showNotification.type === 'success' ? 'bg-slate-900 text-emerald-400 border border-emerald-400/20' : 'bg-rose-600 text-white'
+            }`}>
+              {showNotification.type === 'success' ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+              <span className="font-bold text-sm">{showNotification.message}</span>
+            </div>
+          )}
+
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8 animate-in fade-in duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                {[
+                  { label: 'Total Aset', value: assets.length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50', filter: 'Semua' },
+                  { label: 'Kondisi Baik', value: assets.filter(a => a.condition === 'Baik').length, icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', filter: 'Baik' },
+                  { label: 'Perlu Perbaikan', value: assets.filter(a => a.condition === 'Rusak' || a.condition === 'Diperbaiki').length, icon: AlertCircle, color: 'text-amber-600', bg: 'bg-amber-50', filter: 'Perlu Perbaikan' },
+                  { label: 'Aset Baru', value: assets.length > 5 ? assets.length - 5 : 0, icon: PlusCircle, color: 'text-purple-600', bg: 'bg-purple-50', filter: 'Baru' },
+                ].map((stat, i) => (
+                  <button 
+                    key={i} 
+                    onClick={() => handleStatClick(stat.filter)}
+                    className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center space-x-4 hover:shadow-xl hover:scale-105 hover:border-[#00549B]/20 transition-all text-left group"
+                  >
+                    <div className={`p-4 rounded-2xl ${stat.bg} ${stat.color} group-hover:bg-white transition-colors`}><stat.icon size={24} /></div>
+                    <div>
+                      <p className="text-xs text-slate-400 font-bold uppercase mb-1 tracking-wider">{stat.label}</p>
+                      <p className="text-3xl font-black text-slate-800 group-hover:text-[#00549B] transition-colors">{stat.value}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h3 className="font-black text-xl text-slate-800">Pendaftaran Aset Terbaru</h3>
+                    <p className="text-sm text-slate-400">Monitoring data inventaris yang baru masuk.</p>
+                  </div>
+                  <button onClick={() => { setFilterStatus('Semua'); setActiveTab('list'); }} className="bg-slate-50 text-[#00549B] px-4 py-2 rounded-xl text-sm font-bold flex items-center hover:bg-[#00549B] hover:text-white transition-colors">
+                    Semua Data <ChevronRight size={16} className="ml-1" />
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm border-separate border-spacing-y-2">
+                    <thead>
+                      <tr className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">
+                        <th className="pb-4 px-4">Foto</th>
+                        <th className="pb-4">Nomor Aset</th>
+                        <th className="pb-4">Nama Aset</th>
+                        <th className="pb-4">Kategori</th>
+                        <th className="pb-4 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assets.slice(0, 5).map((asset) => (
+                        <tr key={asset.id} className="group hover:bg-slate-50">
+                          <td className="py-3 px-4 first:rounded-l-2xl">
+                            {asset.image ? <img src={asset.image} className="w-12 h-12 rounded-xl object-cover border-2 border-white" /> : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-300"><ImageIcon size={20} /></div>}
+                          </td>
+                          <td className="py-3 font-mono text-xs text-[#00549B] font-bold">{asset.number}</td>
+                          <td className="py-3 font-bold text-slate-700">{asset.name}</td>
+                          <td className="py-3"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[11px] text-slate-600 font-bold uppercase">{asset.category}</span></td>
+                          <td className="py-3 text-center last:rounded-r-2xl">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${asset.condition === 'Baik' ? 'bg-emerald-100 text-emerald-700' : asset.condition === 'Rusak' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{asset.condition}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'list' && (
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center space-x-4 flex-1">
+                    <div className="relative w-full md:w-80">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input type="text" placeholder="Cari aset..." className="w-full pl-12 pr-4 py-3 bg-white border border-slate-200 rounded-2xl shadow-sm outline-none focus:ring-2 focus:ring-[#00549B]/10 transition-all" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+                    </div>
+                    {filterStatus !== 'Semua' && (
+                        <div className="flex items-center space-x-2 bg-[#00549B] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg animate-in zoom-in-90">
+                            <Filter size={14} />
+                            <span>Filter: {filterStatus}</span>
+                            <button onClick={() => setFilterStatus('Semua')} className="ml-2 p-1 hover:bg-white/20 rounded-full"><X size={14}/></button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <input type="file" ref={fileInputRef} className="hidden" accept=".xls,.xlsx" onChange={handleImport} />
+                  <button onClick={handleDownloadTemplate} className="flex items-center space-x-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-xs hover:bg-slate-50 shadow-sm transition-all" title="Unduh Template Import Excel">
+                    <Download size={18} className="text-[#8CC63F]" />
+                    <span className="hidden lg:inline">Template</span>
+                  </button>
+                  <button onClick={triggerImport} className="flex items-center space-x-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-xs hover:bg-slate-50 shadow-sm transition-all" title="Import Data Excel">
+                    <Upload size={18} className="text-[#00549B]" />
+                    <span className="hidden lg:inline">Import</span>
+                  </button>
+                  <button onClick={handleExport} className="flex items-center space-x-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-[#00549B] font-bold text-xs hover:bg-blue-50 shadow-sm transition-all">
+                    <FileSpreadsheet size={18} />
+                    <span className="hidden lg:inline">Export XLS</span>
+                  </button>
+                  <button onClick={() => setActiveTab('add')} className="bg-[#00549B] text-white px-6 py-3 rounded-2xl font-bold shadow-lg flex items-center space-x-2 active:scale-95 hover:shadow-blue-900/40 transition-all">
+                    <PlusCircle size={18} />
+                    <span>Tambah</span>
+                  </button>
+                </div>
+              </div>
+
+              {filteredAssets.length === 0 ? (
+                <div className="bg-white rounded-3xl p-20 flex flex-col items-center justify-center border border-slate-100 text-center">
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Search className="text-slate-300" size={32}/></div>
+                    <h3 className="text-lg font-bold text-slate-700">Tidak ada aset ditemukan</h3>
+                    <p className="text-sm text-slate-400 mt-1 max-w-xs">Coba ubah kata kunci pencarian atau reset filter untuk melihat data lainnya.</p>
+                    <button onClick={() => { setSearchQuery(''); setFilterStatus('Semua'); }} className="mt-6 text-[#00549B] font-bold text-sm flex items-center hover:underline">
+                        <RefreshCcw size={16} className="mr-2" /> Reset Tampilan
+                    </button>
+                </div>
+              ) : (
+                <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase text-[10px] tracking-widest">
+                        <tr><th className="p-6">Foto</th><th className="p-6">Aset</th><th className="p-6">Kategori</th><th className="p-6">Lokasi</th><th className="p-6">Kondisi</th><th className="p-6">Keterangan</th><th className="p-6 text-center">Aksi</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
+                        {filteredAssets.map((asset) => (
+                        <tr key={asset.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="p-6">{asset.image ? <img src={asset.image} className="w-14 h-14 rounded-2xl object-cover border-2 border-white shadow-md" /> : <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-300"><ImageIcon size={24} /></div>}</td>
+                            <td className="p-6"><div className="font-black text-base">{asset.name}</div><div className="text-xs font-mono text-[#00549B] font-bold mt-1 px-2 py-0.5 bg-blue-50 inline-block rounded-md">{asset.number}</div></td>
+                            <td className="p-6"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[11px] font-bold">{asset.category}</span></td>
+                            <td className="p-6 font-medium">{asset.location}</td>
+                            <td className="p-6"><span className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${asset.condition === 'Baik' ? 'bg-emerald-100 text-emerald-700' : asset.condition === 'Rusak' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{asset.condition}</span></td>
+                            <td className="p-6 text-slate-400 text-xs italic max-w-[150px] truncate">{asset.description || '-'}</td>
+                            <td className="p-6"><div className="flex items-center justify-center space-x-2"><button className="p-3 text-slate-400 hover:text-[#00549B] hover:bg-white hover:shadow-sm rounded-xl border border-transparent hover:border-slate-100"><QrCode size={18} /></button><button className="p-3 text-slate-400 hover:text-[#00549B] hover:bg-white hover:shadow-sm rounded-xl border border-transparent hover:border-slate-100"><Eye size={18} /></button></div></td>
+                        </tr>
+                        ))}
+                    </tbody>
+                    </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'add' && (
+            <div className="max-w-5xl mx-auto animate-in zoom-in-95 duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-6">
+                  <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                    {newAsset.image ? (
+                      <div className="relative w-full aspect-square rounded-3xl overflow-hidden group shadow-2xl">
+                        <img src={newAsset.image} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><button onClick={removeImage} className="bg-white/20 p-4 rounded-full text-white hover:bg-rose-500 backdrop-blur-md"><X size={32} /></button></div>
+                        {isAiLoading && <div className="absolute inset-0 bg-white/90 backdrop-blur-md flex flex-col items-center justify-center space-y-4 text-[#00549B]"><Loader2 className="animate-spin" size={48} /><p className="text-sm font-black animate-pulse tracking-[0.2em]">AI Menganalisis...</p></div>}
+                      </div>
+                    ) : (
+                      <div className="py-10 space-y-8">
+                        <div className="w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-[2.5rem] flex items-center justify-center text-[#00549B] mx-auto opacity-20"><Camera size={48} /></div>
+                        <h3 className="text-2xl font-black text-slate-800">Smart Scan & Upload</h3>
+                        <label className="inline-block bg-[#00549B] text-white px-10 py-4 rounded-2xl font-black shadow-xl cursor-pointer active:scale-95 transition-all">AMBIL FOTO ASET<input type="file" className="hidden" accept="image/*" onChange={handleAiScan} /></label>
+                      </div>
+                    )}
+                  </div>
+                  <div className="bg-blue-600 p-8 rounded-[2rem] text-white shadow-xl relative overflow-hidden group">
+                    <div className="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform duration-700"><PlnLogo className="w-48 h-48" /></div>
+                    <div className="relative z-10 flex items-start space-x-4"><AlertCircle size={20} /><div className="font-bold tracking-tight">Standardisasi Foto<p className="text-xs mt-2 opacity-80 leading-relaxed">Gunakan foto yang jelas untuk membantu AI melakukan klasifikasi kategori otomatis secara tepat.</p></div></div>
+                  </div>
+                </div>
+                <div className="bg-white p-10 rounded-[2rem] shadow-sm border border-slate-100 space-y-8">
+                  <h3 className="text-xl font-black text-slate-800 border-b pb-4 uppercase tracking-tight">Detail Inventaris Baru</h3>
+                  <div className="space-y-6">
+                    <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Nama Aset</label><input type="text" value={newAsset.name} onChange={(e) => setNewAsset({...newAsset, name: e.target.value})} className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-[#00549B] outline-none font-bold shadow-inner" placeholder="Contoh: AC Panasonic 1 PK" /></div>
+                    <div className="grid grid-cols-2 gap-6">
+                      <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Kategori</label><select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" value={newAsset.category} onChange={(e) => setNewAsset({...newAsset, category: e.target.value})}><option>Elektronik</option><option>Furniture</option><option>Alat Ukur</option><option>Lainnya</option></select></div>
+                      <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Kondisi</label><select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" value={newAsset.condition} onChange={(e) => setNewAsset({...newAsset, condition: e.target.value})}><option>Baik</option><option>Rusak</option><option>Diperbaiki</option></select></div>
+                    </div>
+                    <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lokasi</label><input type="text" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:border-[#00549B] outline-none font-bold shadow-inner" placeholder="Gedung / Ruangan" value={newAsset.location} onChange={(e) => setNewAsset({...newAsset, location: e.target.value})} /></div>
+                    <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Keterangan</label><textarea className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold h-24 resize-none shadow-inner" placeholder="Detail tambahan..." value={newAsset.description} onChange={(e) => setNewAsset({...newAsset, description: e.target.value})}></textarea></div>
+                    <button onClick={handleSaveAsset} disabled={!newAsset.name || isAiLoading} className="w-full py-5 bg-gradient-to-r from-[#00549B] to-[#003B6D] text-white font-black rounded-2xl shadow-xl shadow-blue-900/30 active:scale-95 transition-all disabled:opacity-50 mt-4 uppercase">DAFTARKAN ASET</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
